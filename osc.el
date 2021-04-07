@@ -31,13 +31,13 @@ Also works if the current working directory is a subdirectory of a package direc
 (defun osc--package-directory-p (osc-dir)
   "Return wether the passed OSC-DIR is an osc package working directory or not.
 
-(osc--working-directory-p osc-dir) must be true."
+\(osc--working-directory-p osc-dir) must be true."
   (file-exists-p (expand-file-name "_package" (expand-file-name ".osc" osc-dir))))
 
 (defun osc--project-directory-p (osc-dir)
   "Return wether the passed OSC-DIR is an osc project working directory or not.
 
-(osc--working-directory-p osc-dir) must be true."
+\(osc--working-directory-p osc-dir) must be true."
   (not (osc--package-directory-p osc-dir)))
 
 (defun osc--find-osc-working-directory (dir)
