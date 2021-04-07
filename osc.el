@@ -18,7 +18,7 @@ Any ARGS given will be appended to the command."
   "Run osc status in the current package directory.
 
 Also works if the current working directory is a subdirectory of a package directory."
-  (if-let ((osc-dir (osc--find-osc-working-directory)))
+  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
     (when (osc--package-directory-p osc-dir)
       (osc-run "status" osc-dir))
     (message "Not in an osc package directory.")))
@@ -40,17 +40,15 @@ Also works if the current working directory is a subdirectory of a package direc
 (osc--working-directory-p osc-dir) must be true."
   (not (osc--package-directory-p osc-dir)))
 
-(defun osc--find-osc-working-directory (&optional current)
+(defun osc--find-osc-working-directory (dir)
   "Recursively find an osc working directory.
 
 The function walks the directory tree up to ~/.
 
-The optional CURRENT directory is used for recursive calls."
-  (unless current
-    (setq current default-directory))
-  (if (osc--working-directory-p current)
-      current
-    (let ((parent (file-name-directory (directory-file-name current))))
+The starting point for finding the directory is specified by DIR."
+  (if (osc--working-directory-p dir)
+      dir
+    (let ((parent (file-name-directory (directory-file-name dir))))
         (if (string= parent "/home/")
             nil
           (osc--find-osc-working-directory parent)))))
