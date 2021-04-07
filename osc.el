@@ -3,8 +3,8 @@
 ;;; Magit-inspired osc procelain
 ;;; Code:
 
-(defun run-osc (subcmd &optional directory &rest args)
-  "Run an osc command, specified as SUBCMD.
+(defun osc-run (subcmd &optional directory &rest args)
+  "Run an osc command synchronously, specified as SUBCMD.
 
 DIRECTORY  can be used to change the working directory for the call.
 Any ARGS given will be appended to the command."
@@ -14,13 +14,14 @@ Any ARGS given will be appended to the command."
         (call-process "osc" nil "*osc-out*" nil subcmd (format "%s" args))
       (call-process "osc" nil "*osc-out*" nil subcmd))))
 
-(defun run-osc-status ()
+(defun osc-run-status ()
   "Run osc status in the current package directory.
 
 Also works if the current working directory is a subdirectory of a package directory."
-  (when-let ((osc-dir (osc--find-osc-working-directory)))
+  (if-let ((osc-dir (osc--find-osc-working-directory)))
     (when (osc--package-directory-p osc-dir)
-      (run-osc "status" osc-dir)))
+      (osc-run "status" osc-dir))
+    (message "Not in an osc package directory.")))
 
 (defun osc--working-directory-p (dir)
   "Return wether the passed DIR is an osc working directory or not."
@@ -28,15 +29,16 @@ Also works if the current working directory is a subdirectory of a package direc
        dir))
 
 (defun osc--package-directory-p (osc-dir)
-  "Return wether the passed OSC-DIR is an osc package working directory or not."
+  "Return wether the passed OSC-DIR is an osc package working directory or not.
+
+(osc--working-directory-p osc-dir) must be true."
   (file-exists-p (expand-file-name "_package" (expand-file-name ".osc" osc-dir))))
 
-  ;; (let (( (expand-file-name ".osc" osc-dir)))
-  ;;   (file-exists-p "_package")))
-
 (defun osc--project-directory-p (osc-dir)
-  "Return wether the passed OSC-DIR is an osc project working directory or not."
-  (not osc--package-directory-p osc-dir))
+  "Return wether the passed OSC-DIR is an osc project working directory or not.
+
+(osc--working-directory-p osc-dir) must be true."
+  (not (osc--package-directory-p osc-dir)))
 
 (defun osc--find-osc-working-directory (&optional current)
   "Recursively find an osc working directory.
