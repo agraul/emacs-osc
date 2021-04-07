@@ -49,7 +49,7 @@ The optional CURRENT directory is used for recursive calls."
   (if (osc--working-directory-p current)
       current
     (let ((parent (file-name-directory (directory-file-name current))))
-        (if (string= parent "~/")
+        (if (string= parent "/home/")
             nil
           (osc--find-osc-working-directory parent)))))
 
