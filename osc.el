@@ -55,28 +55,5 @@ The optional CURRENT directory is used for recursive calls."
             nil
           (osc--find-osc-working-directory parent)))))
 
-;; primitive test cases
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs"))
-  (run-osc "status"))
-
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs"))
-  (run-osc "dependson" nil "openSUSE_Tumbleweed" "x86_64"))
-
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs/"))
-  (osc--find-osc-working-directory))
-
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs/foo/"))
-  (osc--find-osc-working-directory))
-
-(let ((default-directory "~/src/dotfiles/"))
-  (osc--find-osc-working-directory))
-
-(let ((default-directory "~/src/dotfiles/"))
-  (run-osc-status))
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs/foo/"))
-  (run-osc-status))
-(let ((default-directory "~/src/OBS/home:agraul/gccemacs/"))
-  (run-osc-status))
-
 (provide 'osc)
 ;;; osc.el ends here
