@@ -3,7 +3,23 @@
 ;;; Magit-inspired osc procelain
 ;;; Code:
 
+(define-derived-mode osc-status-mode special-mode "osc-status"
+  (setq buffer-read-only t))
+
 (defvar osc--status-buffer-name "*osc-status*")
+
+(defun osc-run-status ()
+  "Run osc status in the current package directory.
+
+Also works if the current working directory is a subdirectory of a package directory."
+  (interactive)
+  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
+      (when (osc--package-directory-p osc-dir)
+        (kill-buffer osc--status-buffer-name)
+        (osc-run "status" osc--status-buffer-name osc-dir)
+        (switch-to-buffer osc--status-buffer-name)
+        (osc-status-mode))
+    (message "Not in an osc package directory.")))
 
 (defun osc-run (subcmd buf &optional directory &rest args)
   "Run an osc command synchronously, specified as SUBCMD.
@@ -16,18 +32,6 @@ Any ARGS given will be appended to the command."
     (if args
         (call-process "osc" nil buf nil subcmd (format "%s" args))
       (call-process "osc" nil buf nil subcmd))))
-
-(defun osc-run-status ()
-  "Run osc status in the current package directory.
-
-Also works if the current working directory is a subdirectory of a package directory."
-  (interactive)
-  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
-      (when (osc--package-directory-p osc-dir)
-        (kill-buffer osc--status-buffer-name)
-        (osc-run "status" osc--status-buffer-name osc-dir)
-        (switch-to-buffer osc--status-buffer-name))
-    (message "Not in an osc package directory.")))
 
 (defun osc--working-directory-p (dir)
   "Return whether the passed DIR is an osc working directory or not."
