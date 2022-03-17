@@ -8,6 +8,11 @@
 
 (defvar osc--status-buffer-name "*osc-status*")
 
+(defun osc--cleanup-status-buffer ()
+  "Kill osc-status buffer if it exists."
+  (when (bufferp (get-buffer osc--status-buffer-name))
+    (kill-buffer osc--status-buffer-name)))
+
 (defun osc-run-status ()
   "Run osc status in the current package directory.
 
@@ -15,10 +20,30 @@ Also works if the current working directory is a subdirectory of a package direc
   (interactive)
   (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
       (when (osc--package-directory-p osc-dir)
-        (kill-buffer osc--status-buffer-name)
+        (osc--cleanup-status-buffer)
         (osc-run "status" osc--status-buffer-name osc-dir)
         (switch-to-buffer osc--status-buffer-name)
         (osc-status-mode))
+    (message "Not in an osc package directory.")))
+
+(defun osc-add-at-point (filename)
+  "Add a file to list of files tracked by `osc'.
+
+When called interactively, use the filename at point.
+
+Otherwise pass the file as FILENAME."
+  (interactive
+   (list (thing-at-point 'filename)))
+  (osc-run-add filename))
+
+(defun osc-run-add (file)
+  "Add FILE to the list of files tracked by `osc'.
+
+Must be in a package directory or a subdirectory thereof."
+  (interactive "fFile: ")
+  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
+      (when (osc--package-directory-p osc-dir)
+        (osc-run "add" "*osc-log*" osc-dir file))
     (message "Not in an osc package directory.")))
 
 (defun osc-run (subcmd buf &optional directory &rest args)
@@ -30,7 +55,9 @@ Any ARGS given will be appended to the command."
   (let ((default-directory (or directory
                                default-directory)))
     (if args
-        (call-process "osc" nil buf nil subcmd (format "%s" args))
+        (progn
+          (message "%s" args)
+          (call-process "osc" nil buf nil subcmd (mapconcat 'identity args " ")))
       (call-process "osc" nil buf nil subcmd))))
 
 (defun osc--working-directory-p (dir)
