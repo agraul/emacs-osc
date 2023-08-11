@@ -5,18 +5,25 @@
 
 (define-derived-mode osc-status-mode special-mode "osc-status"
   (setq buffer-read-only t))
-
 (defvar osc--status-buffer-name "*osc-status*")
-
 (defun osc--cleanup-status-buffer ()
   "Kill osc-status buffer if it exists."
   (when (bufferp (get-buffer osc--status-buffer-name))
     (kill-buffer osc--status-buffer-name)))
 
+(define-derived-mode osc-results-mode special-mode "osc-results"
+  (setq buffer-read-only t))
+(defvar osc--results-buffer-name "*osc-results*")
+(defun osc--cleanup-results-buffer ()
+  "Kill osc-results buffer if it exists."
+  (when (bufferp (get-buffer osc--results-buffer-name))
+    (kill-buffer osc--results-buffer-name)))
+
 (defun osc-run-status ()
   "Run osc status in the current package directory.
 
-Also works if the current working directory is a subdirectory of a package directory."
+Also works if the current working directory is a subdirectory of a package
+directory."
   (interactive)
   (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
       (when (osc--package-directory-p osc-dir)
@@ -24,6 +31,16 @@ Also works if the current working directory is a subdirectory of a package direc
         (osc-run "status" osc--status-buffer-name osc-dir)
         (switch-to-buffer osc--status-buffer-name)
         (osc-status-mode))
+    (message "Not in an osc package directory.")))
+
+(defun osc-run-results ()
+  (interactive)
+  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
+      (when (osc--package-directory-p osc-dir)
+        (osc--cleanup-results-buffer)
+        (osc-run "results" osc--results-buffer-name osc-dir)
+        (switch-to-buffer osc--results-buffer-name)
+        (osc-results-mode))
     (message "Not in an osc package directory.")))
 
 (defun osc-add-at-point (filename)
