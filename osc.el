@@ -94,8 +94,11 @@ Set EDIT-ONLY to avoid creating a new entry at the top."
   (osc-buildlog-mode))
 
 (defun osc-run-rdiff (oldprj oldpack newprj &optional newpack)
-  "Run `osc rdiff'."
-  (interactive "sOld Project: \nsOld Package: \nsNew Project: \nsNew Package:")
+  "Run `osc rdiff'.
+
+Like `osc', OLDPRJ OLDPACK and NEWPRJ are required. NEWPACK
+defaults to OLDPACK if omitted."
+  (interactive "sOld Project: \nsOld Package: \nsNew Project: \nsNew Package: ")
   (osc--cleanup-rdiff-buffer)
   (osc-run "rdiff"
            osc--rdiff-buffer-name
@@ -104,7 +107,7 @@ Set EDIT-ONLY to avoid creating a new entry at the top."
            oldpack
            newprj
            (or newpack oldpack))
-  (switch-to-buffer osc-rdiff-buffer-name)
+  (switch-to-buffer osc--rdiff-buffer-name)
   (osc-rdiff-mode))
 
 (defun osc-run-update ()
