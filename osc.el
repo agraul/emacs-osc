@@ -4,6 +4,7 @@
 ;;; Code:
 
 (require 'transient)
+(require 'with-editor)
 
 ;; REVIEW: are different modes for different outputs needed?
 (define-derived-mode osc-status-mode special-mode "osc-status"
@@ -63,6 +64,18 @@ directory."
         (osc-run "results" osc--results-buffer-name osc-dir)
         (switch-to-buffer osc--results-buffer-name)
         (osc-results-mode))
+    (message "Not in an osc package directory.")))
+
+(defun osc-run-vc (&optional edit-only)
+  "Edit changlog interactively.
+
+Set EDIT-ONLY to avoid creating a new entry at the top."
+  (interactive "p")
+  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
+      (when (osc--package-directory-p osc-dir)
+        (if (> edit-only 1)
+          (osc-run-with-editor "vc" "*osc*" nil "--just-edit"))
+        (osc-run-with-editor "vc" "*osc*"))
     (message "Not in an osc package directory.")))
 
 (defun osc--run-remotebuildlog (project package repository architecture &optional flavor)
@@ -130,7 +143,20 @@ Any ARGS given will be appended to the command."
   (let ((default-directory (or directory
                                default-directory))
         (shell-command-buffer-name buf))
-    (shell-command (format "osc %s" (mapconcat #'identity (cons subcmd args) " ")))))
+    (shell-command (apply #'osc--format-cmd subcmd args))))
+
+
+(defun osc-run-with-editor (subcmd buf &optional directory &rest args)
+  "Run an osc command asynchronously using with-editor, specified as SUBCMD.
+
+with-editor is used to enable editing changelogs, checkin
+messages and the like.
+
+BUF is the buffer that the output is written to.
+DIRECTORY  can be used to change the working directory for the call.
+Any ARGS given will be appended to the command."
+ (let ((default-directory (or directory default-directory)))
+   (with-editor-async-shell-command (apply #'osc--format-cmd subcmd args) buf)))
 
 (defun osc-package ()
   "Return the name of the active osc package."
@@ -152,6 +178,10 @@ Any ARGS given will be appended to the command."
                         (expand-file-name ".osc" osc-dir)))
      (string-trim (buffer-string)))
    (message "Not in an osc directory.")))
+
+(defun osc--format-cmd (subcmd &rest args)
+  "Format an osc command built from SUBCMD and ARGS."
+  (format "osc %s" (mapconcat #'identity (cons subcmd args) " ")))
 
 (defun osc--working-directory-p (dir)
   "Return whether the passed DIR is an osc working directory or not."
