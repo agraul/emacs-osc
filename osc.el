@@ -3,63 +3,114 @@
 ;;; Magit-inspired osc procelain
 ;;; Code:
 
+(require 'magit-section)
 (require 'transient)
 (require 'with-editor)
 
-;; REVIEW: are different modes for different outputs needed?
-(define-derived-mode osc-status-mode special-mode "osc-status"
-  (setq buffer-read-only t))
-(defvar osc--status-buffer-name "*osc-status*")
-(defun osc--cleanup-status-buffer ()
-  "Kill osc-status buffer if it exists."
-  (when (bufferp (get-buffer osc--status-buffer-name))
-    (kill-buffer osc--status-buffer-name)))
+(define-derived-mode osc-mode magit-section-mode "osc"
+  "Mode for interacting with `osc'.")
+(defvar osc--buffer-name "*osc-status*")
 
-(define-derived-mode osc-results-mode special-mode "osc-results"
-  (setq buffer-read-only t))
-(defvar osc--results-buffer-name "*osc-results*")
-(defun osc--cleanup-results-buffer ()
-  "Kill osc-results buffer if it exists."
-  (when (bufferp (get-buffer osc--results-buffer-name))
-    (kill-buffer osc--results-buffer-name)))
+(defun osc--kill-buffer (buffer-or-name)
+  "Kill BUFFER-OR-NAME if it exists."
+  (when (bufferp (get-buffer buffer-or-name))
+    (kill-buffer buffer-or-name)))
 
-(define-derived-mode osc-rdiff-mode diff-mode "osc-rdiff"
-  (setq buffer-read-only t))
-(defvar osc--rdiff-buffer-name "*osc-rdiff*")
-(defun osc--cleanup-rdiff-buffer ()
-  "Kill osc-rdiff buffer if it exists."
-  (when (bufferp (get-buffer osc--rdiff-buffer-name))
-    (kill-buffer osc--rdiff-buffer-name)))
+(defclass osc-status-section (magit-section)
+  ((files :initform nil)))
 
-(define-derived-mode osc-buildlog-mode special-mode "osc-buildlog"
-  (setq buffer-read-only t))
-(defvar osc--buildlog-buffer-name "*osc-buildlog*")
-(defun osc--cleanup-buildlog-buffer ()
-  "Kill osc-buildlog buffer if it exists."
-  (when (bufferp (get-buffer osc--buildlog-buffer-name))
-    (kill-buffer osc--buildlog-buffer-name)))
+;;;Commands
+(defun osc-cmd-status (&optional dir)
+  "Run \"osc status\" in the current package directory.
 
-
-;; TODO: display status using magit-section
-(defun osc-run-status ()
-  "Run `osc status' in the current package directory.
-
-Also works if the current working directory is a subdirectory of a package
-directory."
+Pass the universal-argument to prompt for an alternative directory.
+In Lisp code, DIR can be passed instead."
   (interactive)
-  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
-      (when (osc--package-directory-p osc-dir)
-        (osc--cleanup-status-buffer)
-        (osc-run "status" osc--status-buffer-name osc-dir)
-        (switch-to-buffer osc--status-buffer-name)
-        (osc-status-mode))
-    (message "Not in an osc package directory.")))
+  (let ((osc-dir (cond (dir dir)
+                       (current-prefix-arg (osc--read-directory))
+                       (t default-directory))))
+    (if (or (not osc-dir) (not (osc-package osc-dir)))
+        (error "%s is not an osc package directory" osc-dir)
+      (osc--kill-buffer osc--buffer-name)
+      (switch-to-buffer osc--buffer-name)
+      ;; (erase-buffer)
+      (insert (string-join (osc-info osc-dir) "\n"))
+      (magit-insert-section (osc-status-section)
+        (magit-insert-heading nil "Files")
+        (insert (osc-run "status" osc-dir "-v")))
+      (osc-mode))))
 
+;;; Functions
+;;; Running commands
+(defun osc-run (subcmd &optional directory &rest args)
+  "Run an osc command synchronously, specified as SUBCMD.
+
+DIRECTORY  can be used to change the working directory for the call.
+Any ARGS given will be appended to the command."
+  (let ((default-directory (or directory
+                               default-directory)))
+    (shell-command-to-string (apply #'osc--format-cmd subcmd args))))
+
+
+(defun osc-run-with-editor (subcmd buf &optional directory &rest args)
+  "Run an osc command asynchronously using with-editor, specified as SUBCMD.
+
+with-editor is used to enable editing changelogs, checkin
+messages and the like.
+
+BUF is the buffer that the output is written to.
+DIRECTORY  can be used to change the working directory for the call.
+Any ARGS given will be appended to the command."
+  (let ((default-directory (or directory default-directory)))
+    (with-editor-async-shell-command (apply #'osc--format-cmd subcmd args) buf)))
+
+(defun osc--format-cmd (subcmd &rest args)
+  "Format an osc command built from SUBCMD and ARGS."
+  ;;FIXME: quote args
+  (format "osc %s" (mapconcat #'identity (cons subcmd args) " ")))
+
+;;;project / package information
+;;TODO: cache per-directory
+(defun osc-info (&optional dir)
+  "Return information about the active osc package or project checkout.
+
+Pass DIR to set the checkout directory. Defaults to \"default-directory\"."
+  (string-split (osc-run "info" dir) "\n"))
+
+(defun osc-package (&optional dir)
+  "Return the name of the active osc package.
+
+DIR is the directory of the active osc package. Defaults to
+ \"default-directory\"."
+  (when-let ((name-str (car (seq-filter (lambda (s) (string-prefix-p "Package name:" s))
+                                        (osc-info dir)))))
+    (nth 2 (string-split name-str))))
+
+(defun osc-project (&optional dir)
+  "Return the name of the active osc project.
+
+DIR is the directory of the active osc package. Defaults to
+ \"default-directory\"."
+  (when-let ((name-str (car (seq-filter (lambda (s) (string-prefix-p "Project name:" s))
+                                        (osc-info dir)))))
+    (nth 2 (string-split name-str))))
+
+(defun osc--project-p (dir)
+  "Return t if DIR is a project directory."
+  (and (osc-project dir)
+       (not (osc-package dir))))
+
+;; TODO: add completions
+(defun osc--read-directory ()
+  "Read a directory (string)."
+  (read-string "Directory: " default-directory))
+
+;;; old functions to update
 (defun osc-run-results ()
   "Run `osc results' in the current package directory."
   (interactive)
-  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
-      (when (osc--package-directory-p osc-dir)
+  (if (osc-package)
+      (progn
         (osc--cleanup-results-buffer)
         (osc-run "results" osc--results-buffer-name osc-dir)
         (switch-to-buffer osc--results-buffer-name)
@@ -70,11 +121,11 @@ directory."
   "Edit changlog interactively.
 
 Set EDIT-ONLY to avoid creating a new entry at the top."
-  (interactive "p")
+  (interactive "P")
   (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
       (when (osc--package-directory-p osc-dir)
-        (if (> edit-only 1)
-          (osc-run-with-editor "vc" "*osc*" nil "--just-edit"))
+        (if edit-only
+            (osc-run-with-editor "vc" "*osc*" nil "--just-edit"))
         (osc-run-with-editor "vc" "*osc*"))
     (message "Not in an osc package directory.")))
 
@@ -115,7 +166,7 @@ defaults to OLDPACK if omitted."
   (interactive)
   (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
       (when (osc--package-directory-p osc-dir)
-        (osc-run "update" "*osc-log*" osc-dir))))
+        (osc-run "update" "*osc*" osc-dir))))
 
 (defun osc-add-at-point (filename)
   "Add a file to list of files tracked by `osc'.
@@ -134,94 +185,23 @@ Must be in a package directory or a subdirectory thereof."
   (interactive "fFile: ")
   (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
       (when (osc--package-directory-p osc-dir)
-        (osc-run "add" "*osc-log*" osc-dir file))
+        (osc-run "add" "*osc*" osc-dir file))
     (message "Not in an osc package directory.")))
 
-(defun osc-run (subcmd buf &optional directory &rest args)
-  "Run an osc command synchronously, specified as SUBCMD.
 
-BUF is the buffer that the output is written to.
-DIRECTORY  can be used to change the working directory for the call.
-Any ARGS given will be appended to the command."
-  (let ((default-directory (or directory
-                               default-directory))
-        (shell-command-buffer-name buf))
-    (shell-command (apply #'osc--format-cmd subcmd args))))
-
-
-(defun osc-run-with-editor (subcmd buf &optional directory &rest args)
-  "Run an osc command asynchronously using with-editor, specified as SUBCMD.
-
-with-editor is used to enable editing changelogs, checkin
-messages and the like.
-
-BUF is the buffer that the output is written to.
-DIRECTORY  can be used to change the working directory for the call.
-Any ARGS given will be appended to the command."
- (let ((default-directory (or directory default-directory)))
-   (with-editor-async-shell-command (apply #'osc--format-cmd subcmd args) buf)))
-
-(defun osc-package ()
-  "Return the name of the active osc package."
-  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
-      (when (osc--package-directory-p osc-dir)
-        (with-temp-buffer
-          (insert-file-contents
-           (expand-file-name "_package"
-                             (expand-file-name ".osc" osc-dir)))
-          (string-trim (buffer-string))))
-    (message "Not in an osc package directory.")))
-
-(defun osc-project ()
-  "Return the name of the active osc project."
-  (if-let ((osc-dir (osc--find-osc-working-directory default-directory)))
-   (with-temp-buffer
-     (insert-file-contents
-      (expand-file-name "_project"
-                        (expand-file-name ".osc" osc-dir)))
-     (string-trim (buffer-string)))
-   (message "Not in an osc directory.")))
-
-(defun osc--format-cmd (subcmd &rest args)
-  "Format an osc command built from SUBCMD and ARGS."
-  (format "osc %s" (mapconcat #'identity (cons subcmd args) " ")))
-
-(defun osc--working-directory-p (dir)
-  "Return whether the passed DIR is an osc working directory or not."
-  (and (file-exists-p (expand-file-name ".osc" dir))
-       dir))
-
-(defun osc--package-directory-p (osc-dir)
-  "Return whether the passed OSC-DIR is an osc package working directory or not.
-
-\(osc--working-directory-p osc-dir) must be true."
-  (file-exists-p (expand-file-name "_package" (expand-file-name ".osc" osc-dir))))
-
-(defun osc--project-directory-p (osc-dir)
-  "Return whether the passed OSC-DIR is an osc project working directory or not.
-
-\(osc--working-directory-p osc-dir) must be true."
-  (not (osc--package-directory-p osc-dir)))
-
-(defun osc--find-osc-working-directory (dir)
-  "Recursively find an osc working directory.
-
-The function walks the directory tree up to ~/.
-
-The starting point for finding the directory is specified by DIR."
-  (if (osc--working-directory-p dir)
-      dir
-    (let ((parent (file-name-directory (directory-file-name dir))))
-        (if (string= parent "/home/")
-            nil
-          (osc--find-osc-working-directory parent)))))
+(transient-define-prefix osc--transient-rdiff ()
+  ["Server-side \"pretty\" diff of two packages\n"
+   ("-r" "Revision N:M, n=old M=new" "--revision=")
+   ("p" "Two packages" osc-run-rdiff)
+   ("t" "Revision of this package" osc-run-rdiff)
+   ("m" "Project meta" osc-run-rdiff)])
 
 ;; TODO: Add arguments
 (transient-define-prefix osc-dispatch ()
   "Invoke an osc command."
   [("s" "status" osc-run-status)
    ("r" "results" osc-run-results)
-   ("D" "rdiff"  osc-run-rdiff)
+   ("D" "rdiff" osc--transient-rdiff)
    ("u" "update" osc-run-update)])
 
 (provide 'osc)
